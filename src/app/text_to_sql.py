@@ -1,3 +1,4 @@
+import time
 import sys
 import os
 
@@ -10,20 +11,32 @@ sys.path.append(
     )
 )
 
+from utils.logger import log_query
 import pandas as pd
 
 from sqlalchemy import text
 
 from database.connection import engine
+from analytics.chart_selector import choose_chart
 
+from analytics.chart_generator import (
+    create_bar_chart,
+    create_line_chart
+)
 from groq import Groq
 from dotenv import load_dotenv
 
+from database.schema_extractor import (
+    extract_schema
+)
+from llm.sql_validator import validate_sql
 from llm.prompts import (
-    schema,
-    relationships,
+    get_relationships,
     examples
 )
+relationships = get_relationships()
+
+schema = extract_schema()
 
 load_dotenv()
 
@@ -52,6 +65,8 @@ Rules:
 10. Use the relationships provided.
 11. Prefer direct JOINs.
 12. Avoid subqueries unless absolutely necessary.
+13. Some date columns are stored as TEXT.
+14. Always CAST date columns to TIMESTAMP before using EXTRACT, DATE_TRUNC, AGE, or date calculations.
 
 Schema:
 
@@ -116,6 +131,30 @@ if any(word in sql_lower for word in blocked_words):
 print("\nGenerated SQL:\n")
 print(generated_sql)
 
+print("\nValidating SQL...\n")
+
+validation_result = validate_sql(
+    question,
+    generated_sql,
+    schema
+)
+if validation_result.strip() == "VALID":
+
+    print("\nSQL validation passed.")
+
+else:
+
+    if not validation_result.lower().startswith("select"):
+
+        raise ValueError(
+            "Validator returned invalid output."
+        )
+
+    print("\nValidator corrected query:\n")
+
+    print(validation_result)
+
+    generated_sql = validation_result
 print("\nExecuting SQL...\n")
 
 try:
@@ -128,13 +167,47 @@ try:
             )
         )
 
+        start_time = time.time()
+
         df = pd.read_sql(
             generated_sql,
             conn
         )
 
+        execution_time =round( 
+            time.time() - start_time,
+            3
+            )
+
     print("\nResults:\n")
-    print(df.head())
+    print(df.head(10))
+
+    log_query(
+    question,
+    generated_sql,
+    execution_time,
+    len(df)
+    )
+
+    chart_type = choose_chart(df)
+
+    if chart_type == "bar":
+
+        create_bar_chart(df)
+
+    elif chart_type == "line":
+
+        create_line_chart(df)
+
+    from llm.insight_generator import generate_insights
+
+    insights = generate_insights(
+    question,
+    df)
+
+    print("\nBusiness Insights:\n")
+    print(insights)
+
 
 except Exception as e:
 

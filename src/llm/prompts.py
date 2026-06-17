@@ -71,9 +71,9 @@ product_category_name
 product_category_name_english
 """
 
-relationships = """
-Relationships:
+def get_relationships():
 
+    return """
 customers.customer_id = orders.customer_id
 
 orders.order_id = payments.order_id
@@ -142,4 +142,26 @@ JOIN order_items oi
 ON s.seller_id = oi.seller_id
 GROUP BY s.seller_id
 ORDER BY revenue DESC;
+
+Example 4
+
+Question:
+Show products sold in 2017
+
+SQL:
+SELECT
+p.product_id,
+COUNT(*) AS quantity_sold
+FROM order_items oi
+JOIN orders o
+ON oi.order_id = o.order_id
+JOIN products p
+ON oi.product_id = p.product_id
+WHERE EXTRACT(
+YEAR FROM CAST(
+o.order_purchase_timestamp AS TIMESTAMP
+)
+) = 2017
+GROUP BY p.product_id
+ORDER BY quantity_sold DESC;
 """

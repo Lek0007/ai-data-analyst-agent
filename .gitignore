@@ -8,5 +8,5 @@ __pycache__/
 
 *.pyc
 *.pyo
-
+logs/*.csv
 .vscode/
